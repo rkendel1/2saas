@@ -1790,8 +1790,18 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				sub = updatedSub
 			}
 
+			if inv == nil {
+				s.Logger.Infow("no invoice created for period",
+					"subscription_id", sub.ID,
+					"period_start", period.start,
+					"period_end", period.end,
+					"period_index", i)
+				continue
+			}
+
 			s.Logger.Infow("created invoice for period",
 				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
 				"period_start", period.start,
 				"period_end", period.end,
 				"period_index", i)
@@ -1813,22 +1823,6 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 					"end_date", *sub.EndDate)
 				break
 			}
-
-			if inv == nil {
-				s.Logger.Errorw("skipping period as no invoice was created",
-					"subscription_id", sub.ID,
-					"period_start", period.start,
-					"period_end", period.end,
-					"period_index", i)
-				continue
-			}
-
-			s.Logger.Infow("created invoice for period",
-				"subscription_id", sub.ID,
-				"invoice_id", inv.ID,
-				"period_start", period.start,
-				"period_end", period.end,
-				"period_index", i)
 		}
 
 		// Update to the new current period (last period)
