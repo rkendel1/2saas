@@ -1371,6 +1371,60 @@ var (
 			},
 		},
 	}
+	// ScheduledJobsColumns holds the columns for the "scheduled_jobs" table.
+	ScheduledJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "connection_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "interval", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "job_config", Type: field.TypeJSON, Nullable: true},
+		{Name: "last_run_at", Type: field.TypeTime, Nullable: true},
+		{Name: "next_run_at", Type: field.TypeTime, Nullable: true},
+		{Name: "last_run_status", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "last_run_error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "temporal_schedule_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+	}
+	// ScheduledJobsTable holds the schema information for the "scheduled_jobs" table.
+	ScheduledJobsTable = &schema.Table{
+		Name:       "scheduled_jobs",
+		Columns:    ScheduledJobsColumns,
+		PrimaryKey: []*schema.Column{ScheduledJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "scheduledjob_tenant_id_environment_id_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{ScheduledJobsColumns[1], ScheduledJobsColumns[7], ScheduledJobsColumns[11]},
+			},
+			{
+				Name:    "scheduledjob_connection_id_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{ScheduledJobsColumns[8], ScheduledJobsColumns[11]},
+			},
+			{
+				Name:    "scheduledjob_entity_type_interval_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{ScheduledJobsColumns[9], ScheduledJobsColumns[10], ScheduledJobsColumns[11]},
+			},
+			{
+				Name:    "scheduledjob_enabled_next_run_at",
+				Unique:  false,
+				Columns: []*schema.Column{ScheduledJobsColumns[11], ScheduledJobsColumns[14]},
+			},
+			{
+				Name:    "scheduledjob_connection_id_entity_type",
+				Unique:  true,
+				Columns: []*schema.Column{ScheduledJobsColumns[8], ScheduledJobsColumns[9]},
+			},
+		},
+	}
 	// SecretsColumns holds the columns for the "secrets" table.
 	SecretsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1771,7 +1825,9 @@ var (
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "task_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "file_url", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "scheduled_job_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "workflow_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "file_url", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "file_name", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "file_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "task_status", Type: field.TypeString, Default: "PENDING", SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1804,7 +1860,7 @@ var (
 			{
 				Name:    "idx_tasks_tenant_env_task_status",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[1], TasksColumns[7], TasksColumns[13], TasksColumns[2]},
+				Columns: []*schema.Column{TasksColumns[1], TasksColumns[7], TasksColumns[15], TasksColumns[2]},
 			},
 		},
 	}
@@ -2151,6 +2207,7 @@ var (
 		PlansTable,
 		PricesTable,
 		PriceUnitTable,
+		ScheduledJobsTable,
 		SecretsTable,
 		SettingsTable,
 		SubscriptionsTable,

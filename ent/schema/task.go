@@ -39,11 +39,24 @@ func (Task) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			NotEmpty(),
+		field.String("scheduled_job_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Comment("Reference to the scheduled job that created this task (for export tasks)"),
+		field.String("workflow_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Temporal workflow ID (wrapper workflow) for tracking the execution"),
 		field.String("file_url").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			NotEmpty(),
+			Default(""),
 		field.String("file_name").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",

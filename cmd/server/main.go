@@ -14,8 +14,11 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/scheduledjob"
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/httpclient"
+	s3Integration "github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
@@ -37,6 +40,7 @@ import (
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/flexprice/flexprice/internal/webhook"
+	temporalSDK "go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 
 	lambdaEvents "github.com/aws/aws-lambda-go/events"
@@ -47,6 +51,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/security"
+	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
 	"github.com/gin-gonic/gin"
 )
 
@@ -164,6 +169,7 @@ func main() {
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
+			repository.NewScheduledJobRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -182,6 +188,8 @@ func main() {
 			// Services
 			// Integration factory must be provided before service params
 			integration.NewFactory,
+			provideS3Client,
+			provideExportService,
 			service.NewServiceParams,
 			service.NewTenantService,
 			service.NewAuthService,
@@ -218,6 +226,8 @@ func main() {
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
 			service.NewAlertLogsService,
+			service.NewScheduledJobOrchestrator,
+			service.NewScheduledJobService,
 		),
 	)
 
@@ -227,6 +237,7 @@ func main() {
 			// Temporal components
 			provideTemporalConfig,
 			provideTemporalClient,
+			provideTemporalSDKClient,
 			provideTemporalWorkerManager,
 			provideTemporalService,
 
@@ -286,6 +297,10 @@ func provideHandlers(
 	alertLogsService service.AlertLogsService,
 	integrationFactory *integration.Factory,
 	db postgres.IClient,
+	s3Client *s3Integration.Client,
+	exportService *syncExport.ExportService,
+	scheduledJobRepo scheduledjob.Repository,
+	scheduledJobService service.ScheduledJobService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, cfg, logger),
@@ -325,11 +340,22 @@ func provideHandlers(
 		Addon:                    v1.NewAddonHandler(addonService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
+		TestExport:               v1.NewTestExportHandler(s3Client, logger),
+		TestUsageExport:          v1.NewTestUsageExportHandler(exportService, scheduledJobRepo, logger),
+		ScheduledJob:             v1.NewScheduledJobHandler(scheduledJobService, logger),
 	}
 }
 
 func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
 	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService)
+}
+
+func provideS3Client(connectionRepo connection.Repository, encryptionService security.EncryptionService, logger *logger.Logger) *s3Integration.Client {
+	return s3Integration.NewClient(connectionRepo, encryptionService, logger)
+}
+
+func provideExportService(featureUsageRepo events.FeatureUsageRepository, s3Client *s3Integration.Client, logger *logger.Logger) *syncExport.ExportService {
+	return syncExport.NewExportService(featureUsageRepo, s3Client, logger)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
@@ -365,6 +391,10 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (clie
 
 func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *logger.Logger) worker.TemporalWorkerManager {
 	return worker.NewTemporalWorkerManager(temporalClient, log)
+}
+
+func provideTemporalSDKClient(temporalClient client.TemporalClient) temporalSDK.Client {
+	return temporalClient.GetRawClient()
 }
 
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
